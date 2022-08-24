@@ -81,14 +81,6 @@ func (s *Session) String() string {
 	return "Local: " + s.localURI.String() + ", Remote: " + s.remoteURI.String()
 }
 
-func (s *Session) LocalURI() sip.Address {
-	return s.localURI
-}
-
-func (s *Session) RemoteURI() sip.Address {
-	return s.remoteURI
-}
-
 func (s *Session) LocalSdp() string {
 	if s.uaType == "UAC" {
 		return s.offer
@@ -241,9 +233,10 @@ func (s *Session) ReInvite() {
 }
 
 //Bye send Bye request.
-func (s *Session) Bye() (sip.Response, error) {
-	req := s.makeRequest(s.uaType, sip.BYE, sip.MessageID(s.callID), s.request, s.response)
-	return s.sendRequest(req)
+func (s *Session) Bye() {
+	method := sip.BYE
+	req := s.makeRequest(s.uaType, method, sip.MessageID(s.callID), s.request, s.response)
+	s.sendRequest(req)
 }
 
 func (s *Session) sendRequest(req sip.Request) (sip.Response, error) {
@@ -257,7 +250,7 @@ func (s *Session) Reject(statusCode sip.StatusCode, reason string) {
 	request := s.request
 	s.Log().Debugf("Reject: Request => %s, body => %s", request.Short(), request.Body())
 	response := sip.NewResponseFromRequest(request.MessageID(), request, statusCode, reason, "")
-	response.AppendHeader(s.contact)
+	response.AppendHeader(s.localURI.AsContactHeader())
 	tx.Respond(response)
 }
 
@@ -323,7 +316,7 @@ func (s *Session) Accept(statusCode sip.StatusCode) {
 		sip.CopyHeaders("Content-Type", request, response)
 	}
 
-	response.AppendHeader(s.contact)
+	response.AppendHeader(s.localURI.AsContactHeader())
 	response.SetBody(s.answer, true)
 
 	s.response = response
@@ -355,8 +348,7 @@ func (s *Session) Provisional(statusCode sip.StatusCode, reason string) {
 	} else {
 		response = sip.NewResponseFromRequest(request.MessageID(), request, statusCode, reason, "")
 	}
-	response.AppendHeader(s.contact)
-
+	response.AppendHeader(s.localURI.AsContactHeader())
 	s.response = response
 	tx.Respond(response)
 }
@@ -381,28 +373,25 @@ func (s *Session) makeRequest(uaType string, method sip.RequestMethod, msgID sip
 	newRequest.AppendHeader(to)
 	newRequest.SetRecipient(s.request.Recipient())
 	sip.CopyHeaders("Via", inviteRequest, newRequest)
-	newRequest.AppendHeader(s.contact)
 
 	if uaType == "UAC" {
-		for _, header := range s.response.Headers() {
-			if header.Name() == "Record-Route" {
-				h := header.(*sip.RecordRouteHeader)
-				rh := &sip.RouteHeader{
-					Addresses: h.Addresses,
-				}
-				newRequest.AppendHeader(rh)
-			}
+		if contact, ok := s.request.Contact(); ok {
+			newRequest.AppendHeader(contact)
 		}
+
 		if len(inviteRequest.GetHeaders("Route")) > 0 {
 			sip.CopyHeaders("Route", inviteRequest, newRequest)
 		}
 	} else if uaType == "UAS" {
+		if contact, ok := s.response.Contact(); ok {
+			newRequest.AppendHeader(contact)
+		}
+
 		if len(inviteResponse.GetHeaders("Route")) > 0 {
 			sip.CopyHeaders("Route", inviteResponse, newRequest)
 		}
 		newRequest.SetDestination(inviteResponse.Destination())
 		newRequest.SetSource(inviteResponse.Source())
-		newRequest.SetRecipient(to.Address)
 	}
 
 	maxForwardsHeader := sip.MaxForwards(70)
