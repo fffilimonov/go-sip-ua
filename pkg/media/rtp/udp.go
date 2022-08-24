@@ -3,7 +3,7 @@ package rtp
 import (
 	"net"
 
-	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
+	"github.com/fffilimonov/go-sip-ua/pkg/utils"
 	"github.com/ghettovoice/gosip/log"
 )
 
@@ -60,7 +60,6 @@ func (r *RtpUDPStream) Close() {
 }
 
 func (r *RtpUDPStream) Send(pkt []byte, raddr *net.UDPAddr) (int, error) {
-	r.Log().Debugf("Send to %v, length %d", raddr.String(), len(pkt))
 	r.raddr = raddr
 	return r.conn.WriteToUDP(pkt, raddr)
 }
