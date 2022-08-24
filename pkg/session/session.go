@@ -241,6 +241,7 @@ func (s *Session) Bye() {
 
 func (s *Session) sendRequest(req sip.Request) (sip.Response, error) {
 	s.Log().Debugf(s.uaType+" send request: %v => \n%v", req.Method(), req)
+	s.StoreRequest(req)
 	return s.requestCallbck(context.TODO(), req, nil, false, 1)
 }
 
